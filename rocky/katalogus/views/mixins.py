@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from requests import HTTPError, RequestException
 from rest_framework.status import HTTP_404_NOT_FOUND
+from tools.view_helpers import schedule_task
 
 from katalogus.client import (
     Boefje as KATalogusBoefje,
@@ -27,7 +28,7 @@ from rocky.exceptions import (
     IndemnificationNotPresentException,
     TrustedClearanceLevelTooLowException,
 )
-from rocky.scheduler import Boefje, BoefjeTask, Normalizer, NormalizerTask, QueuePrioritizedItem, RawData, client
+from rocky.scheduler import Boefje, BoefjeTask, Normalizer, NormalizerTask, QueuePrioritizedItem, RawData
 from rocky.views.mixins import OctopoesView
 
 logger = getLogger(__name__)
@@ -77,7 +78,7 @@ class SinglePluginView(OrganizationView):
         return fields.get("hide_value_in_interface", False)
 
 
-class NormalizerMixin:
+class NormalizerMixin(OctopoesView):
     """
     When a user wants to run a normalizer on a given set of raw data,
     this mixin provides the method to construct the normalizer task for that data and run it.
@@ -85,11 +86,14 @@ class NormalizerMixin:
 
     def run_normalizer(self, normalizer: KATalogusNormalizer, raw_data: RawData) -> None:
         normalizer_task = NormalizerTask(
-            id=uuid4(), normalizer=Normalizer(id=normalizer.id, version=None), raw_data=raw_data
+            id=uuid4(),
+            normalizer=Normalizer.parse_obj(normalizer.dict()),
+            raw_data=raw_data,
         )
 
-        item = QueuePrioritizedItem(id=normalizer_task.id, priority=1, data=normalizer_task)
-        client.push_task(f"normalizer-{self.organization.code}", item)
+        task = QueuePrioritizedItem(id=normalizer_task.id, priority=1, data=normalizer_task)
+
+        schedule_task(self.request, self.organization.code, task)
 
 
 class BoefjeMixin(OctopoesView):
@@ -106,8 +110,8 @@ class BoefjeMixin(OctopoesView):
             organization=self.organization.code,
         )
 
-        item = QueuePrioritizedItem(id=boefje_task.id, priority=1, data=boefje_task)
-        client.push_task(f"boefje-{self.organization.code}", item)
+        task = QueuePrioritizedItem(id=boefje_task.id, priority=1, data=boefje_task)
+        schedule_task(self.request, self.organization.code, task)
 
     def run_boefje_for_oois(
         self,
