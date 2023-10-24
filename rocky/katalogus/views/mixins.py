@@ -74,7 +74,7 @@ class SinglePluginView(OrganizationView):
         """Check whether this field should be required, defaults to False."""        
         return self.plugin_schema and field in self.plugin_schema.get("required", [])
 
-    def is_secret_field(self, fields: dict) -> bool:
+    def is_secret_field(self, field: str) -> bool:
         """Check whether this field should be secret, defaults to False."""
         return self.plugin_schema and field in self.plugin_schema.get("secret", [])
 
